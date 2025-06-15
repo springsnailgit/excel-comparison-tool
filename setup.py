@@ -16,7 +16,7 @@ if requirements_path.exists():
 
 setup(
     name="excel-comparison-tool",
-    version="1.2.0",
+    version="1.2.1",
     author="Excel Comparison Tool Team",
     author_email="support@example.com",
     description="一个功能强大的Excel数据比对和筛选工具",

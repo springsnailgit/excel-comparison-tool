@@ -6,7 +6,7 @@ from pathlib import Path
 
 # 应用基本信息
 APP_NAME: Final[str] = "Excel数据比对工具"
-APP_VERSION: Final[str] = "1.2.0"
+APP_VERSION: Final[str] = "1.2.1"
 
 # 默认配置
 DEFAULT_CONFIG = {
