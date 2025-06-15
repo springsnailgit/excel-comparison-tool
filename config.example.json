@@ -1,0 +1,16 @@
+{
+  "excel_file_filters": "Excel Files (*.xlsx *.xls *.xlsm)",
+  "window_min_width": 900,
+  "window_min_height": 700,
+  "table_max_display_rows": 1000,
+  "max_file_size_mb": 100,
+  "chunk_size": 10000,
+  "max_filter_conditions": 50,
+  "timestamp_format": "%Y%m%d_%H%M%S",
+  "log_date_format": "%Y-%m-%d %H:%M:%S",
+  "log_level": "INFO",
+  "log_file_max_size": 10,
+  "log_backup_count": 5,
+  "export_sheet_name_max_length": 31,
+  "export_filename_max_length": 200
+}

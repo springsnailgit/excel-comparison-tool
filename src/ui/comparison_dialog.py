@@ -1,13 +1,14 @@
 from typing import List, Dict, Tuple, Union, Optional, Any
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QTableView, QMessageBox, QCheckBox, QApplication
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QTableView, QMessageBox, QCheckBox, QApplication, QComboBox
 )
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex
 import pandas as pd
 import sys
 from ..excel_handler import ExcelHandler
-from ..config import MESSAGES
+from ..config import MESSAGES, config
+from ..utils.logger import get_logger
 
 
 class PandasTableModel(QAbstractTableModel):
@@ -74,28 +75,31 @@ class ColumnSelectionDialog(QDialog):
 
 class ComparisonDialog(QDialog):
     """数据比对对话框"""
-    
+
     def __init__(self, parent: Any, selected_columns: List[str], excel_handler: ExcelHandler):
         super().__init__(parent)
-        
+
+        self.logger = get_logger(self.__class__.__name__)
         self.selected_columns: List[str] = selected_columns
         self.excel_handler: ExcelHandler = excel_handler
         self.all_columns: List[str] = excel_handler.get_column_names()
         self.preview_dataframe: Optional[pd.DataFrame] = None
         self.current_filter: Optional[str] = None
         self.applied_filters: List[str] = []
-        
+
         # UI元素
         self.columns_info_label: QLabel = None
         self.edit_columns_button: QPushButton = None
+        self.strategy_combo: QComboBox = None
         self.input_edit: QLineEdit = None
         self.preview_button: QPushButton = None
         self.filter_button: QPushButton = None
+        self.batch_filter_button: QPushButton = None
         self.table_view: QTableView = None
         self.status_label: QLabel = None
         self.continue_button: QPushButton = None
         self.finish_button: QPushButton = None
-        
+
         self._setup_ui()
         self._connect_signals()
         
@@ -109,6 +113,9 @@ class ComparisonDialog(QDialog):
         # 列选择区域
         layout.addLayout(self._create_column_section())
         
+        # 筛选策略区域
+        layout.addLayout(self._create_strategy_section())
+
         # 输入区域
         layout.addLayout(self._create_input_section())
         
@@ -139,7 +146,31 @@ class ComparisonDialog(QDialog):
         layout.addWidget(self.columns_info_label, 1)
         layout.addWidget(self.edit_columns_button)
         return layout
-    
+
+    def _create_strategy_section(self) -> QHBoxLayout:
+        """创建筛选策略选择区域
+
+        Returns:
+            QHBoxLayout: 包含策略选择的布局
+        """
+        layout = QHBoxLayout()
+
+        layout.addWidget(QLabel("筛选策略:"))
+
+        self.strategy_combo = QComboBox()
+        strategies = [
+            ("contains", "包含匹配"),
+            ("exact", "精确匹配"),
+            ("regex", "正则表达式")
+        ]
+        for value, text in strategies:
+            self.strategy_combo.addItem(text, value)
+
+        layout.addWidget(self.strategy_combo)
+        layout.addStretch()
+
+        return layout
+
     def _create_input_section(self) -> QHBoxLayout:
         """创建输入区域
         
@@ -156,9 +187,11 @@ class ComparisonDialog(QDialog):
         
         self.preview_button = QPushButton("预览数据")
         self.filter_button = QPushButton("执行筛选")
-        
+        self.batch_filter_button = QPushButton("批量筛选")
+
         layout.addWidget(self.preview_button)
         layout.addWidget(self.filter_button)
+        layout.addWidget(self.batch_filter_button)
         return layout
     
     def _create_button_section(self) -> QHBoxLayout:
@@ -182,8 +215,10 @@ class ComparisonDialog(QDialog):
     def _connect_signals(self) -> None:
         """连接信号和槽"""
         self.edit_columns_button.clicked.connect(self.edit_selected_columns)
+        self.strategy_combo.currentTextChanged.connect(self.on_strategy_changed)
         self.preview_button.clicked.connect(self.preview_data)
         self.filter_button.clicked.connect(self.filter_data)
+        self.batch_filter_button.clicked.connect(self.batch_filter_data)
         self.continue_button.clicked.connect(self.continue_comparison)
         self.finish_button.clicked.connect(self.accept)
     
@@ -225,37 +260,83 @@ class ComparisonDialog(QDialog):
             QMessageBox.critical(self, "错误", f"预览数据时出错: {str(e)}")
     
     def filter_data(self) -> None:
-        """执行筛选，将预览数据应用为最终筛选结果"""
-        if self.preview_dataframe is None:
-            QMessageBox.warning(self, "警告", MESSAGES["preview_first"])
+        """执行筛选"""
+        filter_text = self.input_edit.text().strip()
+
+        if not filter_text:
+            QMessageBox.warning(self, "警告", MESSAGES["enter_filter_text"])
             return
-        
+
         try:
-            # 在原始数据中找到匹配的行并移除
-            indices_to_remove = self._find_matching_indices()
-            
-            if indices_to_remove:
-                # 获取筛选数据
-                mask = self.excel_handler.dataframe.index.isin(indices_to_remove)
-                filtered_data = self.excel_handler.dataframe[mask].copy()
-                
-                # 生成条件名称
-                condition_name = self._generate_condition_name()
-                
-                # 保存筛选结果并移除原始数据
-                self.excel_handler.filtered_sheets[condition_name] = filtered_data
-                self.excel_handler.dataframe = self.excel_handler.dataframe[~mask].reset_index(drop=True)
-                
+            # 获取当前选择的筛选策略
+            strategy = self.strategy_combo.currentData()
+
+            # 执行筛选
+            success, result = self.excel_handler.filter_data(
+                self.selected_columns, filter_text, strategy
+            )
+
+            if success:
+                self.logger.info(f"筛选成功: {filter_text}")
+                QMessageBox.information(self, "筛选成功",
+                    f"已成功筛选数据，共 {len(result)} 行")
+
                 # 重置状态
                 self._reset_filter_state()
-                
-                QMessageBox.information(self, "筛选成功", 
-                    f"已成功将筛选结果保存为 '{condition_name}'，共 {len(filtered_data)} 行")
             else:
-                QMessageBox.warning(self, "警告", MESSAGES["no_data_found"])
-                
+                QMessageBox.warning(self, "筛选结果", result)
+
         except Exception as e:
-            QMessageBox.critical(self, "错误", f"筛选数据时出错: {str(e)}")
+            error_msg = f"筛选数据时出错: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            QMessageBox.critical(self, "错误", error_msg)
+
+    def batch_filter_data(self) -> None:
+        """批量筛选数据"""
+        # 这里可以实现一个对话框让用户输入多个筛选条件
+        filter_text = self.input_edit.text().strip()
+
+        if not filter_text:
+            QMessageBox.warning(self, "警告", "请输入筛选条件，多个条件用逗号分隔")
+            return
+
+        # 简单实现：用逗号分隔多个条件
+        filter_values = [f.strip() for f in filter_text.split(',') if f.strip()]
+
+        if len(filter_values) < 2:
+            QMessageBox.warning(self, "警告", "批量筛选需要至少2个条件，请用逗号分隔")
+            return
+
+        try:
+            # 询问用户选择AND还是OR逻辑
+            reply = QMessageBox.question(
+                self, "选择逻辑",
+                "选择筛选逻辑：\n是(Yes) = AND逻辑（同时满足所有条件）\n否(No) = OR逻辑（满足任一条件）",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+
+            logic = 'AND' if reply == QMessageBox.StandardButton.Yes else 'OR'
+
+            success, result = self.excel_handler.filter_data_batch(
+                self.selected_columns, filter_values, logic
+            )
+
+            if success:
+                sheet_name = list(result.keys())[0]
+                filtered_data = list(result.values())[0]
+                self.logger.info(f"批量筛选成功: {filter_values} ({logic})")
+                QMessageBox.information(self, "批量筛选成功",
+                    f"已成功筛选数据，共 {len(filtered_data)} 行\n工作表名: {sheet_name}")
+
+                # 重置状态
+                self._reset_filter_state()
+            else:
+                QMessageBox.warning(self, "筛选结果", result)
+
+        except Exception as e:
+            error_msg = f"批量筛选时出错: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            QMessageBox.critical(self, "错误", error_msg)
     
     def _create_filter_mask(self, data: pd.DataFrame, filter_value: str) -> pd.Series:
         """创建筛选掩码
@@ -355,6 +436,19 @@ class ComparisonDialog(QDialog):
         for i in range(len(dataframe.columns)):
             self.table_view.resizeColumnToContents(i)
     
+    def on_strategy_changed(self, strategy_text: str) -> None:
+        """筛选策略改变时的处理"""
+        strategy_map = {
+            "包含匹配": "contains",
+            "精确匹配": "exact",
+            "正则表达式": "regex"
+        }
+
+        strategy = strategy_map.get(strategy_text, "contains")
+        if self.excel_handler.set_filter_strategy(strategy):
+            self.status_label.setText(f"筛选策略已设置为: {strategy_text}")
+            self.logger.info(f"筛选策略已更改为: {strategy}")
+
     def continue_comparison(self) -> None:
         """清空当前输入，准备下一次比对"""
         self.input_edit.clear()

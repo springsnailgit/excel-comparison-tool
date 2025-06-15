@@ -9,40 +9,47 @@ from typing import NoReturn
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-print("正在导入PyQt6...")
 from PyQt6.QtWidgets import QApplication
-print("正在导入MainWindow...")
 from src.ui.main_window import MainWindow
-print("正在导入APP_NAME...")
 from src.config import APP_NAME
+from src.utils.logger import setup_logger, get_logger
 
 
 def main() -> NoReturn:
     """程序主入口函数
-    
+
     启动应用程序并显示主窗口
     """
-    print("正在初始化应用程序...")
-    app = QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
-    app.setStyle("Fusion")
-    
-    print("正在创建主窗口...")
-    # 创建并显示主窗口
-    window = MainWindow()
-    print("正在显示主窗口...")
-    window.show()
-    
-    print("正在启动应用程序事件循环...")
-    # 启动应用程序
-    sys.exit(app.exec())
+    # 设置日志
+    logger = setup_logger()
+    logger.info("程序开始启动...")
+
+    try:
+        logger.info("正在初始化应用程序...")
+        app = QApplication(sys.argv)
+        app.setApplicationName(APP_NAME)
+        app.setStyle("Fusion")
+
+        logger.info("正在创建主窗口...")
+        # 创建并显示主窗口
+        window = MainWindow()
+        logger.info("正在显示主窗口...")
+        window.show()
+
+        logger.info("正在启动应用程序事件循环...")
+        # 启动应用程序
+        sys.exit(app.exec())
+
+    except Exception as e:
+        logger.error(f"程序启动失败: {str(e)}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":
     try:
-        print("程序开始执行...")
         main()
     except Exception as e:
         print(f"程序执行出错: {str(e)}")
         import traceback
         traceback.print_exc()
+        sys.exit(1)
