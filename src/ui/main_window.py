@@ -106,12 +106,13 @@ class MainWindow(QMainWindow):
 
         layout.addWidget(QLabel("筛选方式:"))
         self.filter_strategy_combo = QComboBox()
-        self.filter_strategy_combo.addItems([
+        strategies = [
             ("contains", "包含匹配"),
             ("exact", "精确匹配"),
             ("regex", "正则表达式")
-        ])
-        self.filter_strategy_combo.setCurrentText("包含匹配")
+        ]
+        for value, text in strategies:
+            self.filter_strategy_combo.addItem(text, value)
         layout.addWidget(self.filter_strategy_combo)
 
         return group
@@ -161,7 +162,7 @@ class MainWindow(QMainWindow):
         self.compare_button.clicked.connect(self.start_comparison)
         self.reset_button.clicked.connect(self.reset_data)
         self.export_button.clicked.connect(self.export_results)
-        self.filter_strategy_combo.currentTextChanged.connect(self.on_strategy_changed)
+        self.filter_strategy_combo.currentIndexChanged.connect(self.on_strategy_changed)
 
         # 定时更新数据摘要
         self.summary_timer = QTimer()
@@ -264,18 +265,15 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.critical(self, "错误", "重置数据失败")
 
-    def on_strategy_changed(self, strategy_text: str) -> None:
+    def on_strategy_changed(self, index: int) -> None:
         """筛选策略改变时的处理"""
-        strategy_map = {
-            "包含匹配": "contains",
-            "精确匹配": "exact",
-            "正则表达式": "regex"
-        }
+        if index >= 0:
+            strategy = self.filter_strategy_combo.itemData(index)
+            strategy_text = self.filter_strategy_combo.itemText(index)
 
-        strategy = strategy_map.get(strategy_text, "contains")
-        if self.excel_handler.set_filter_strategy(strategy):
-            self.status_bar.showMessage(f"筛选策略已设置为: {strategy_text}")
-            self.logger.info(f"筛选策略已更改为: {strategy}")
+            if self.excel_handler.set_filter_strategy(strategy):
+                self.status_bar.showMessage(f"筛选策略已设置为: {strategy_text}")
+                self.logger.info(f"筛选策略已更改为: {strategy}")
 
     def update_data_summary(self) -> None:
         """更新数据摘要"""

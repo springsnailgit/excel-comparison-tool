@@ -215,7 +215,7 @@ class ComparisonDialog(QDialog):
     def _connect_signals(self) -> None:
         """连接信号和槽"""
         self.edit_columns_button.clicked.connect(self.edit_selected_columns)
-        self.strategy_combo.currentTextChanged.connect(self.on_strategy_changed)
+        self.strategy_combo.currentIndexChanged.connect(self.on_strategy_changed)
         self.preview_button.clicked.connect(self.preview_data)
         self.filter_button.clicked.connect(self.filter_data)
         self.batch_filter_button.clicked.connect(self.batch_filter_data)
@@ -436,18 +436,15 @@ class ComparisonDialog(QDialog):
         for i in range(len(dataframe.columns)):
             self.table_view.resizeColumnToContents(i)
     
-    def on_strategy_changed(self, strategy_text: str) -> None:
+    def on_strategy_changed(self, index: int) -> None:
         """筛选策略改变时的处理"""
-        strategy_map = {
-            "包含匹配": "contains",
-            "精确匹配": "exact",
-            "正则表达式": "regex"
-        }
+        if index >= 0:
+            strategy = self.strategy_combo.itemData(index)
+            strategy_text = self.strategy_combo.itemText(index)
 
-        strategy = strategy_map.get(strategy_text, "contains")
-        if self.excel_handler.set_filter_strategy(strategy):
-            self.status_label.setText(f"筛选策略已设置为: {strategy_text}")
-            self.logger.info(f"筛选策略已更改为: {strategy}")
+            if self.excel_handler.set_filter_strategy(strategy):
+                self.status_label.setText(f"筛选策略已设置为: {strategy_text}")
+                self.logger.info(f"筛选策略已更改为: {strategy}")
 
     def continue_comparison(self) -> None:
         """清空当前输入，准备下一次比对"""
